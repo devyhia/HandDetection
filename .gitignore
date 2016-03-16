@@ -4,13 +4,18 @@
 TestData
 TestData/
 TestData/*
+TestData.zip
 
 # TrainData
 TrainData
 TrainData/
 TrainData/*
+TrainData.rar
 
 # ValidationData
 ValidationData
 ValidationData/
 ValidationData/*
+
+# Avoid MNIST data
+*.gz
