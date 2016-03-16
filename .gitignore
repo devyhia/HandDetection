@@ -1,0 +1,16 @@
+# Datasets
+
+# Test Dataset
+TestData
+TestData/
+TestData/*
+
+# TrainData
+TrainData
+TrainData/
+TrainData/*
+
+# ValidationData
+ValidationData
+ValidationData/
+ValidationData/*
