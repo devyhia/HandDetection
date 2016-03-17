@@ -1,11 +1,14 @@
 from lasagne import layers
 from lasagne.updates import nesterov_momentum
 from nolearn.lasagne import NeuralNet
+import scipy.io as sio
+import scipy.misc as smisc
+import numpy as np
 
 def load():
-    _TRAIN = 1000
-    _TEST = 500
-    _VALIDATION = 100
+    _TRAIN = 100
+    _TEST = 50
+    _VALIDATION = 10
 
     # print "Loading %d for Training, %d for Validation, and %d for Testing!" % (_TRAIN, _VALIDATION, _TEST)
     # We can now download and read the training and test set images and labels.
@@ -21,17 +24,22 @@ def load():
     # print(' Done.\n')
 
     def depth(data):
-        d = np.array(map(lambda i: smisc.imresize(i['depth'], 0.25), data))
+        d = np.array(map(lambda i: smisc.imresize(i['ir'], 0.25), data))
         d.shape = (len(d), 60*80)
+        d /= d.max()
         return d
 
     def label(data):
-        d = np.array(map(lambda i: smisc.imresize(i['lbl'], 0.25), data))
+        d = np.array(map(lambda i: smisc.imresize(i['segmap'], 0.25), data))
         d.shape = (len(d), 60*80)
+        d /= d.max()
         return d
 
     X_train = depth(TrainData)
     y_train = label(TrainData)
+
+    print y_train.shape
+
     # X_test = depth(TestData)
     # y_test = label(TestData)
     # X_val = depth(ValidationData)
@@ -59,11 +67,11 @@ net1 = NeuralNet(
 
     # optimization method:
     update=nesterov_momentum,
-    update_learning_rate=0.01,
+    update_learning_rate=0.25,
     update_momentum=0.9,
 
     regression=True,  # flag to indicate we're dealing with regression problem
-    max_epochs=400,  # we want to train this many epochs
+    max_epochs=10,  # we want to train this many epochs
     verbose=1,
     )
 
