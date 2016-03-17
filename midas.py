@@ -26,6 +26,14 @@ import theano.tensor as T
 
 import lasagne
 
+_BATCH_Train = 25
+_BATCH_Validation = 5
+_BATCH_Test = 10
+
+
+_TRAIN = 2500
+_TEST = 1000
+_VALIDATION = 50
 
 # ################## Download and prepare the MNIST dataset ##################
 # This is just some way of getting the MNIST dataset from an online location
@@ -34,39 +42,25 @@ import lasagne
 printf = lambda s: sys.stdout.write(s)
 
 def load_dataset():
-    _TRAIN = 1000
-    _TEST = 500
-    _VALIDATION = 100
-
     # print "Loading %d for Training, %d for Validation, and %d for Testing!" % (_TRAIN, _VALIDATION, _TEST)
     # We can now download and read the training and test set images and labels.
 
-    print("Training: %d ..." % (_TRAIN))
-    TrainData = map(lambda p: sio.loadmat('TrainData/Data_%s.mat' % (('%d') % (p)).zfill(7)), range(_TRAIN))
-    print(" Done.\nValidation %d ..." % (_VALIDATION))
+    # print("Training: %d ..." % (_TRAIN))
+    # TrainData = map(lambda p: sio.loadmat('TrainData/Data_%s.mat' % (('%d') % (p)).zfill(7)), range(_TRAIN))
+    # print(" Done.\nValidation %d ..." % (_VALIDATION))
+    #
+    # ValidationData = map(lambda p: sio.loadmat('ValidationData/Data_%s.mat' % (('%d') % (p)).zfill(7)), range(_VALIDATION))
+    # print(" Done.\nTesting %d ..." % (_TEST))
+    #
+    # TestData = map(lambda p: sio.loadmat('TestData/Data_%s.mat' % (('%d') % (p)).zfill(7)), range(_TEST))
+    # print(' Done.\n')
 
-    ValidationData = map(lambda p: sio.loadmat('ValidationData/Data_%s.mat' % (('%d') % (p)).zfill(7)), range(_VALIDATION))
-    print(" Done.\nTesting %d ..." % (_TEST))
-
-    TestData = map(lambda p: sio.loadmat('TestData/Data_%s.mat' % (('%d') % (p)).zfill(7)), range(_TEST))
-    print(' Done.\n')
-
-    def depth(data):
-        d = np.array(map(lambda i: smisc.imresize(i['depth'], 0.25), data))
-        d.shape = (len(d), 1, 60, 80)
-        return d
-
-    def label(data):
-        d = np.array(map(lambda i: smisc.imresize(i['lbl'], 0.25), data))
-        d.shape = (len(d), 60*80)
-        return d
-
-    X_train = depth(TrainData)
-    y_train = label(TrainData)
-    X_test = depth(TestData)
-    y_test = label(TestData)
-    X_val = depth(ValidationData)
-    y_val = label(ValidationData)
+    # X_train =  # depth(TrainData)
+    # y_train =  # label(TrainData)
+    # X_test =   # depth(TestData)
+    # y_test = label(TestData)
+    # X_val = depth(ValidationData)
+    # y_val = label(ValidationData)
 
     # We reserve the last 10000 training examples for validation.
     # X_train, X_val = X_train[:-10000], X_train[-10000:]
@@ -90,7 +84,7 @@ def build_mlp(input_var=None):
     # Input layer, specifying the expected input shape of the network
     # (unspecified batchsize, 1 channel, 28 rows and 28 columns) and
     # linking it to the given Theano variable `input_var`, if any:
-    l_in = lasagne.layers.InputLayer(shape=(None, 1, 240/4, 320/4),
+    l_in = lasagne.layers.InputLayer(shape=(None, 240/4 * 320/4),
                                      input_var=input_var)
 
     # Apply 20% dropout to the input data:
@@ -116,7 +110,7 @@ def build_mlp(input_var=None):
 
     # Finally, we'll add the fully-connected output layer, of 10 softmax units:
     l_out = lasagne.layers.DenseLayer(
-            l_hid2_drop, num_units=240*320/16,
+            l_hid2_drop, num_units=2,
             nonlinearity=lasagne.nonlinearities.softmax)
 
     # Each layer is linked to its incoming layer(s), so we only need to pass
@@ -135,7 +129,7 @@ def build_custom_mlp(input_var=None, depth=2, width=800, drop_input=.2,
     # just used different names above for clarity.
 
     # Input layer and dropout (with shortcut `dropout` for `DropoutLayer`):
-    network = lasagne.layers.InputLayer(shape=(None, 1, 28, 28),
+    network = lasagne.layers.InputLayer(shape=(None, 60*80),
                                         input_var=input_var)
     if drop_input:
         network = lasagne.layers.dropout(network, p=drop_input)
@@ -148,7 +142,7 @@ def build_custom_mlp(input_var=None, depth=2, width=800, drop_input=.2,
             network = lasagne.layers.dropout(network, p=drop_hidden)
     # Output layer:
     softmax = lasagne.nonlinearities.softmax
-    network = lasagne.layers.DenseLayer(network, 10, nonlinearity=softmax)
+    network = lasagne.layers.DenseLayer(network, 60*80, nonlinearity=softmax)
     return network
 
 
@@ -205,17 +199,31 @@ def build_cnn(input_var=None):
 # them to GPU at once for slightly improved performance. This would involve
 # several changes in the main program, though, and is not demonstrated here.
 
-def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
-    assert len(inputs) == len(targets)
-    if shuffle:
-        indices = np.arange(len(inputs))
-        np.random.shuffle(indices)
-    for start_idx in range(0, len(inputs) - batchsize + 1, batchsize):
-        if shuffle:
-            excerpt = indices[start_idx:start_idx + batchsize]
-        else:
-            excerpt = slice(start_idx, start_idx + batchsize)
-        yield inputs[excerpt], targets[excerpt]
+def depth(data):
+    d = np.array(map(lambda i: smisc.imresize(i['ir'], 0.25), data))
+    d.shape = (len(d), 60 * 80)
+    d /= d.max()
+    return d
+
+def label(data):
+    # d = np.array(map(lambda i: smisc.imresize(i['lbl'], 0.25), data))
+    d = np.array(map(lambda i: i['bbox'][0, 0:2], data))
+    d.shape = (len(d), 2)
+    return d
+
+def iterate_minibatches(inputs, batchsize, folder=''):
+    # assert len(inputs) == len(targets)
+    # if shuffle:
+    np.random.shuffle(inputs)
+    for start_idx in range(10):
+        # if shuffle:
+        excerpt = inputs[start_idx*batchsize:(start_idx + 1) * batchsize]
+        data = map(lambda p: sio.loadmat('%s/Data_%s.mat' % (folder, (('%d') % (p)).zfill(7))), excerpt)
+        # else:
+        #     excerpt = slice(start_idx, start_idx + batchsize)
+
+        X,y = depth(data), label(data)
+        yield X, y
 
 
 # ############################## Main program ################################
@@ -223,34 +231,39 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
 # more functions to better separate the code, but it wouldn't make it any
 # easier to read.
 
-def main(model='mlp', num_epochs=500):
+def main(model='mlp', num_epochs=8000):
     # Load the dataset
     print("Loading data...")
-    X_train, y_train, X_val, y_val, X_test, y_test = load_dataset()
+    # X_train, y_train, X_val, y_val, X_test, y_test = load_dataset()
+    Train = range(202000)
+    Test = range(10000)
+    Validation = range(2700)
 
     # Prepare Theano variables for inputs and targets
-    input_var = T.tensor4('inputs')
-    target_var = T.ivector('targets')
+    input_var = T.matrix('inputs')
+    target_var = T.matrix('targets')
+
+    # print(input_var.eval())
 
     # Create neural network model (depending on first command line parameter)
     print("Building model and compiling functions...")
-    if model == 'mlp':
-        network = build_mlp(input_var)
-    elif model.startswith('custom_mlp:'):
-        depth, width, drop_in, drop_hid = model.split(':', 1)[1].split(',')
-        network = build_custom_mlp(input_var, int(depth), int(width),
-                                   float(drop_in), float(drop_hid))
-    elif model == 'cnn':
-        network = build_cnn(input_var)
-    else:
-        print("Unrecognized model type %r." % model)
-        return
+    # if model == 'mlp':
+    network = build_mlp(input_var)
+    # elif model.startswith('custom_mlp:'):
+        # depth, width, drop_in, drop_hid = model.split(':', 1)[1].split(',')
+    # depth,width=2,60*80*2
+    # network = build_custom_mlp(input_var)
+    # elif model == 'cnn':
+    #     network = build_cnn(input_var)
+    # else:
+    #     print("Unrecognized model type %r." % model)
+    #     return
 
     # Create a loss expression for training, i.e., a scalar objective we want
     # to minimize (for our multi-class problem, it is the cross-entropy loss):
     prediction = lasagne.layers.get_output(network)
     loss = lasagne.objectives.categorical_crossentropy(prediction, target_var)
-    loss = loss.mean()
+    loss = loss.mean() / _BATCH_Train
     # We could add some weight decay as well here, see lasagne.regularization.
 
     # Create update expressions for training, i.e., how to modify the
@@ -258,18 +271,16 @@ def main(model='mlp', num_epochs=500):
     # Descent (SGD) with Nesterov momentum, but Lasagne offers plenty more.
     params = lasagne.layers.get_all_params(network, trainable=True)
     updates = lasagne.updates.nesterov_momentum(
-            loss, params, learning_rate=0.01, momentum=0.9)
+            loss, params, learning_rate=0.05, momentum=0.9)
 
     # Create a loss expression for validation/testing. The crucial difference
     # here is that we do a deterministic forward pass through the network,
     # disabling dropout layers.
     test_prediction = lasagne.layers.get_output(network, deterministic=True)
-    test_loss = lasagne.objectives.categorical_crossentropy(test_prediction,
-                                                            target_var)
-    test_loss = test_loss.mean()
-    # As a bonus, also create an expression for the classification accuracy:
-    test_acc = T.mean(T.eq(T.argmax(test_prediction, axis=1), target_var),
-                      dtype=theano.config.floatX)
+    test_loss = lasagne.objectives.categorical_crossentropy(test_prediction, target_var)
+    test_loss = test_loss.mean() / _BATCH_Test
+    # # As a bonus, also create an expression for the classification accuracy:
+    test_acc = T.mean(test_prediction, dtype=theano.config.floatX)
 
     # Compile a function performing a training step on a mini-batch (by giving
     # the updates dictionary) and returning the corresponding training loss:
@@ -277,44 +288,51 @@ def main(model='mlp', num_epochs=500):
 
     # Compile a second function computing the validation loss and accuracy:
     val_fn = theano.function([input_var, target_var], [test_loss, test_acc])
-
+    epic_start = time.time()
     # Finally, launch the training loop.
     print("Starting training...")
+    print("EPOCH\tDuration\tTraining Error\tValidation Error\tValidation Accuracy")
     # We iterate over epochs:
     for epoch in range(num_epochs):
         # In each epoch, we do a full pass over the training data:
+        # print("Training ...")
         train_err = 0
         train_batches = 0
         start_time = time.time()
-        for batch in iterate_minibatches(X_train, y_train, 100, shuffle=True):
+        for batch in iterate_minibatches(Train, _BATCH_Train, folder='TrainData'):
             inputs, targets = batch
             train_err += train_fn(inputs, targets)
             train_batches += 1
+            # print("++ Training Batch %d -- Err %f" % (train_batches, train_err))
 
+        # print("Validation ...")
         # And a full pass over the validation data:
         val_err = 0
         val_acc = 0
         val_batches = 0
-        for batch in iterate_minibatches(X_val, y_val, 100, shuffle=False):
+        for batch in iterate_minibatches(Validation, _BATCH_Validation, folder='ValidationData'):
             inputs, targets = batch
             err, acc = val_fn(inputs, targets)
             val_err += err
             val_acc += acc
             val_batches += 1
+            # print("++ Validation Batch %d -- Err %f -- Acc %f" % (val_batches, val_err, val_acc))
 
         # Then we print the results for this epoch:
-        print("Epoch {} of {} took {:.3f}s".format(
-            epoch + 1, num_epochs, time.time() - start_time))
-        print("  training loss:\t\t{:.6f}".format(train_err / train_batches))
-        print("  validation loss:\t\t{:.6f}".format(val_err / val_batches))
-        print("  validation accuracy:\t\t{:.2f} %".format(
-            val_acc / val_batches * 100))
+        print("%d\t %f\t %f\t %f\t %f"%(epoch + 1, time.time() - start_time, train_err / train_batches, val_err / val_batches, val_acc / val_batches * 100))
+        # print("Epoch {} of {} took {:.3f}s".format(
+        #     epoch + 1, num_epochs, time.time() - start_time))
+        # print("  training loss:\t\t{:.6f}".format(train_err / train_batches))
+        # print("  validation loss:\t\t{:.6f}".format(val_err / val_batches))
+        # print("  validation accuracy:\t\t{:.2f} %".format(
+        #     val_acc / val_batches * 100))
 
+    print("Running Time: %f" % (epic_start-time.time()))
     # After training, we compute and print the test error:
     test_err = 0
     test_acc = 0
     test_batches = 0
-    for batch in iterate_minibatches(X_test, y_test, 100, shuffle=False):
+    for batch in iterate_minibatches(Test, _BATCH_Test, folder='TestData'):
         inputs, targets = batch
         err, acc = val_fn(inputs, targets)
         test_err += err

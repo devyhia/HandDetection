@@ -20,14 +20,18 @@ def load():
     # TestData = map(lambda p: sio.loadmat('TestData/Data_%s.mat' % (('%d') % (p)).zfill(7)), range(_TEST))
     # print(' Done.\n')
 
+    for i in range(len(TrainData)):
+        norm = np.linalg.norm(TrainData[i]['depth'])
+        TrainData[i]['depth'] /= norm
+
     def depth(data):
         d = np.array(map(lambda i: smisc.imresize(i['depth'], 0.25), data))
         d.shape = (len(d), 60*80)
         return d
 
     def label(data):
-        d = np.array(map(lambda i: smisc.imresize(i['lbl'], 0.25), data))
-        d.shape = (len(d), 60*80)
+        d = np.array(map(lambda i: i['bbox'], data))
+        d.shape = (len(d), 4)
         return d
 
     X_train = depth(TrainData)
